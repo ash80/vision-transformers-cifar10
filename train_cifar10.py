@@ -39,7 +39,7 @@ parser.add_argument('--noaug', action='store_false', help='disable use randomaug
 parser.add_argument('--noamp', action='store_true', help='disable mixed precision training. for older pytorch versions')
 parser.add_argument('--nowandb', action='store_true', help='disable wandb')
 parser.add_argument('--mixup', action='store_true', help='add mixup augumentations')
-parser.add_argument('--net', default='vit')
+parser.add_argument('--net', default='vit-rope')
 parser.add_argument('--dp', action='store_true', help='use data parallel')
 parser.add_argument('--bs', default='512')
 parser.add_argument('--size', default="32")
@@ -92,7 +92,7 @@ transform_test = transforms.Compose([
 
 # Add RandAugment with N, M(hyperparameter)
 if aug:  
-    N = 2; M = 14;
+    N = 2; M = 14
     transform_train.transforms.insert(0, RandAugment(N, M))
 
 # Prepare dataset
@@ -170,6 +170,34 @@ elif args.net=="simplevit":
 elif args.net=="vit":
     # ViT for cifar10
     net = ViT(
+    image_size = size,
+    patch_size = args.patch,
+    num_classes = 10,
+    dim = int(args.dimhead),
+    depth = 6,
+    heads = 8,
+    mlp_dim = 512,
+    dropout = 0.1,
+    emb_dropout = 0.1
+)
+elif args.net=="vit-rope":
+    from models.new_vit import ViTRoPE
+    # ViT for cifar10
+    net = ViTRoPE(
+    image_size = size,
+    patch_size = args.patch,
+    num_classes = 10,
+    dim = int(args.dimhead),
+    depth = 6,
+    heads = 8,
+    mlp_dim = 512,
+    dropout = 0.1,
+    emb_dropout = 0.1
+)
+elif args.net=="vit-rope-new":
+    from models.new_new_vit import ViTRoPENew
+    # ViT for cifar10
+    net = ViTRoPENew(
     image_size = size,
     patch_size = args.patch,
     num_classes = 10,

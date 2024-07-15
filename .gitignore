@@ -2,6 +2,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.vscode/
+checkpoint/
+wandb/
+data/
+log/
 
 # C extensions
 *.so
