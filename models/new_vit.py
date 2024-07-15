@@ -81,18 +81,43 @@ class RoPEAttentionHead(nn.Module):
 class RoPEMultiheadAttention(nn.Module):
     def __init__(self, seq_len, dim, heads, dropout=0.1):
         super().__init__()
-        self.heads = nn.ModuleList([
-            RoPEAttentionHead(seq_len, dim, dropout) for _ in range(heads)
-        ])
-        self.linear = nn.Linear(heads * dim, dim)
-        self.dropout = nn.Dropout(dropout)
+        self.w_q = nn.Linear(dim, dim, bias=False)
+        self.w_k = nn.Linear(dim, dim, bias=False)
+        self.w_v = nn.Linear(dim, dim, bias=False)
+        self.heads = heads
+        self.head_dim = dim // heads
+        assert self.head_dim * heads == dim
+        self.dropout_p = dropout
+        self.R = nn.Parameter(self.get_rotary_matrix(seq_len, self.head_dim), requires_grad=False)
+        self.to_multi_heads = Rearrange('b m (h d) -> b h m d', h=heads)
+        self.merge_heads = Rearrange('b h m d -> b m (h d)')
+
+    def get_rotary_matrix(self, context_window, embedding_dim):
+        R = torch.zeros((context_window, embedding_dim, embedding_dim), requires_grad=False)
+        for position in range(context_window):
+            for i in range(embedding_dim//2):
+                theta = 10000. ** (-2.*(i - 1) / embedding_dim)
+                m_theta = position * theta
+                R[position, 2*i,2*i] = np.cos(m_theta)
+                R[position, 2*i,2*i+1] = - np.sin(m_theta)
+                R[position, 2*i+1,2*i] = np.sin(m_theta)
+                R[position, 2*i+1,2*i+1] = np.cos(m_theta)
+        return R
 
     def forward(self, x):
-        heads = [h(x) for h in self.heads]
-        x = torch.cat(heads, dim=-1)
-        x = self.linear(x)
-        x = self.dropout(x)
-        return x
+        b,m,d = x.shape
+
+        q = self.to_multi_heads(self.w_q(x))
+        k = self.to_multi_heads(self.w_k(x))
+        v = self.to_multi_heads(self.w_v(x))
+        q_rotated = torch.einsum('bhmd,mod->bhmo', [q, self.R[:m]])
+        k_rotated = torch.einsum('bhmd,mod->bhmo', [k, self.R[:m]])
+        activations = F.scaled_dot_product_attention(
+            q_rotated,k_rotated,v,dropout_p =self.dropout_p
+        )
+        activations = self.merge_heads(activations)
+        # x = self.linear(x)
+        return activations
 
 
 class SwiGLU(nn.Module):
